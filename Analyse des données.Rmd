@@ -1,0 +1,60 @@
+---
+title: "R Notebook"
+author: "Pierre Goasdoue"
+output:
+  github_document:
+    toc: TRUE
+    toc_depth: 2
+---
+
+```{bash}
+wget ftp://ftp.sra.ebi.ac.uk/vol1/fastq/SRR504/002/SRR5047582/SRR5047582_2.fastq.gz
+```
+
+
+```{r}
+library(Rcpp)
+library(dada2)
+```
+
+```{r}
+path <- "~/CC3/Donnéessep"
+list.files(path)
+```
+
+```{r}
+fnFs <- sort(list.files(path, pattern="_R1.fastq.gz", full.names = TRUE))
+fnRs <- sort(list.files(path, pattern="_R2.fastq.gz", full.names = TRUE))
+sample.names <- sapply(strsplit(basename(fnFs), "_"), `[`, 1)
+```
+
+```{r}
+plotQualityProfile(fnFs[1:2])
+```
+
+```{r}
+plotQualityProfile(fnRs[1:2])
+```
+
+```{r}
+filtFs <- file.path(path, "filtered", paste0(sample.names, "_R1filt.fastq.gz"))
+filtRs <- file.path(path, "filtered", paste0(sample.names, "_R2filt.fastq.gz"))
+names(filtFs) <- sample.names
+names(filtRs) <- sample.names
+```
+
+```{r}
+out <- filterAndTrim(fnFs, filtFs, fnRs, filtRs, truncLen=c(200,200), trimLeft=19,
+              maxN=0, maxEE=c(2,2), truncQ=2, rm.phix=TRUE,
+              compress=TRUE, multithread=TRUE)
+head(out)
+```
+
+```{r}
+errF <- learnErrors(filtFs, multithread=TRUE)
+```
+
+```{r}
+errR <- learnErrors(filtRs, multithread=TRUE)
+```
+
