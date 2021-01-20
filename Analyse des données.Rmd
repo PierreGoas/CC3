@@ -10,31 +10,38 @@ output:
 ```{bash}
 wget ftp://ftp.sra.ebi.ac.uk/vol1/fastq/SRR504/002/SRR5047582/SRR5047582_2.fastq.gz
 ```
+Importation des données. La ligne de code représente l'importation d'une seule séquence mais elle a été répétée pour toutes les autres séquences (en modifiant le numéro du SRR à chaque fois).
 
+# Dada2
 
 ```{r}
 library(Rcpp)
 library(dada2)
 ```
+Importation des librairies nécessaire pour Dada2
 
 ```{r}
 path <- "~/CC3/Donnéessep"
 list.files(path)
 ```
+Assignation des données importées à la valeur path
 
 ```{r}
 fnFs <- sort(list.files(path, pattern="_R1.fastq.gz", full.names = TRUE))
 fnRs <- sort(list.files(path, pattern="_R2.fastq.gz", full.names = TRUE))
 sample.names <- sapply(strsplit(basename(fnFs), "_"), `[`, 1)
 ```
+Association des séquences R1 à fnFs et les séquences R2 à fnRs
 
 ```{r}
 plotQualityProfile(fnFs[1:2])
 ```
+Obsevation du taux d'erreur pour les séquences Fs. On observe une forte diminution du score de qualité vers 200 nucléotide. La coupe se fera ici, ie que tous les nucléotides supérieur à 200 seront supprimés
 
 ```{r}
 plotQualityProfile(fnRs[1:2])
 ```
+Obsevation du taux d'erreur pour les séquences Rs. On observe une forte diminution du score de qualité vers 200 nucléotide. La coupe se fera ici, ie que tous les nucléotides supérieur à 200 seront supprimés
 
 ```{r}
 filtFs <- file.path(path, "filtered", paste0(sample.names, "_R1filt.fastq.gz"))
@@ -42,6 +49,7 @@ filtRs <- file.path(path, "filtered", paste0(sample.names, "_R2filt.fastq.gz"))
 names(filtFs) <- sample.names
 names(filtRs) <- sample.names
 ```
+Filtration des données Fs et Rs
 
 ```{r}
 out <- filterAndTrim(fnFs, filtFs, fnRs, filtRs, truncLen=c(200,200), trimLeft=19,
@@ -49,12 +57,123 @@ out <- filterAndTrim(fnFs, filtFs, fnRs, filtRs, truncLen=c(200,200), trimLeft=1
               compress=TRUE, multithread=TRUE)
 head(out)
 ```
+A partir des données brutes et des données filtrées, les coupes à 200 nucléotides sont faites sur l'ensemble des séquences. De plus, les promoteurs sont également enlevés des séquences (taille du promoteur : 19 nt)
 
 ```{r}
 errF <- learnErrors(filtFs, multithread=TRUE)
 ```
+Calcul du taux d'erreurs des séquences filtrées de Fs
 
 ```{r}
 errR <- learnErrors(filtRs, multithread=TRUE)
+```
+Calcul du taux d'erreurs des séquences filtrées de Rs
+
+```{r}
+plotErrors(errF, nominalQ=TRUE)
+```
+Représentation des fréquences d'erreurs estimées.
+Points gris : taux d'erreurs observées pour chacun des scores de qualité consensus.
+Ligne noire : taux d'erreurs estimé après que l'algorithme ait réuni toutes les informations liée aux taux d'erreurs estimés
+Ligne rouge : taux d'erreurs attendu selon le Q-score
+
+```{r}
+dadaFs <- dada(filtFs, err=errF, multithread=TRUE)
+```
+Application de Dada2 aux données Fs
+
+```{r}
+dadaRs <- dada(filtRs, err=errR, multithread=TRUE)
+```
+Application de Dada2 aux données Rs
+
+```{r}
+dadaFs[[1]]
+```
+Visualisation de la première colonne de DadaFs où 855 séquences différentes ont été identifiées à partir des 59477 séquences présentes dans cet échantillon
+
+```{r}
+mergers <- mergePairs(dadaFs, filtFs, dadaRs, filtRs, verbose=TRUE)
+```
+Les séquences Fs (R1) sont associées à leurs séquences complémentaires Rs (R2)
+
+```{r}
+head(mergers[[1]])
+```
+Visualisation de la première colonne des séquences appariées.
+
+```{r}
+seqtab <- makeSequenceTable(mergers)
+dim(seqtab)
+```
+Sur les 25 échantillons, 355929 tables OTU ont pu être créées
+
+```{r}
+table(nchar(getSequences(seqtab)))
+```
+Visualisation du nombre de séquences et du nombre de nucléotide qui les constituent.
+
+```{r}
+seqtab.nochim <- removeBimeraDenovo(seqtab, method="consensus", multithread=TRUE, verbose=TRUE)
+```
+Elimination des séquences chimériques présentes dans les échantillons.
+
+```{r}
+sum(seqtab.nochim)/sum(seqtab)
+```
+Calcul du taux de séquences chimériques dans nos échantillons. Elles représentent 42% de l'ensemble des séquences du jeu de donnée.
+
+```{r}
+getN <- function(x) sum(getUniques(x))
+track <- cbind(out, sapply(dadaFs, getN), sapply(dadaRs, getN), sapply(mergers, getN), rowSums(seqtab.nochim))
+colnames(track) <- c("input", "filtered", "denoisedF", "denoisedR", "merged", "nonchim")
+rownames(track) <- sample.names
+head(track)
+```
+Récapitulatif des différentes opérations effectuées dans cette partie de l'analyse/
+
+```{bash}
+wget https://zenodo.org/record/3986799/files/silva_nr99_v138_train_set.fa.gz
+```
+Importation de la table taxonomique silva
+
+```{r}
+taxa <- assignTaxonomy(seqtab.nochim, "~/CC3/silva_nr99_v138_train_set.fa.gz", multithread=TRUE)
+```
+Assignation de la taxonomie silva aux jeu de données traités par Dada2
+
+```{r}
+taxa.print <- taxa
+rownames(taxa.print) <- NULL
+head(taxa.print)
+```
+Visualisation des micro-organismes identifiés dans ces jeux de données. 
+
+# Phyloseq
+
+```{r}
+library(phyloseq)
+library(Biostrings)
+library(ggplot2)
+```
+Importation des librairies pour Phyloseq
+
+```{r}
+samples.out <- rownames(seqtab.nochim)
+subject <- sapply(strsplit(samples.out, "Y"), `[`, 1)
+echantillon <- substr(subject,1,10)
+subject <- substr(subject,1,999)
+date <- sapply(strsplit(samples.out, "_"), `[`, 3)
+profondeur <- sapply(strsplit(samples.out, "_"), `[`, 2)
+samdf <- data.frame(Subject=subject, Echantillon=echantillon, Date=date, Profondeur=profondeur)
+samdf$date <- "Sep14" [samdf$Date!="Sep14"] 
+samdf$date <- "Mars15" [samdf$Date!="Mars15"] 
+rownames(samdf) <- samples.out
+```
+
+```{r}
+ps <- phyloseq(otu_table(seqtab.nochim, taxa_are_rows=FALSE), 
+               sample_data(samdf), 
+               tax_table(taxa))
 ```
 
