@@ -171,9 +171,4 @@ samdf$date <- "Mars15" [samdf$Date!="Mars15"]
 rownames(samdf) <- samples.out
 ```
 
-```{r}
-ps <- phyloseq(otu_table(seqtab.nochim, taxa_are_rows=FALSE), 
-               sample_data(samdf), 
-               tax_table(taxa))
-```
-
+C'est sur cette partie que je ne voyais pas comment faire pour associer correctement les données aux différentes valeurs. 
