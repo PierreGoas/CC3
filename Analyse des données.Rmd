@@ -36,12 +36,12 @@ Association des séquences R1 à fnFs et les séquences R2 à fnRs
 ```{r}
 plotQualityProfile(fnFs[1:2])
 ```
-Obsevation du taux d'erreur pour les séquences Fs. On observe une forte diminution du score de qualité vers 200 nucléotide. La coupe se fera ici, ie que tous les nucléotides supérieur à 200 seront supprimés
+Observation du taux d'erreur pour les séquences Fs. On observe une forte diminution du score de qualité vers 200 nucléotide. La coupe se fera ici, ie que tous les nucléotides supérieur à 200 seront supprimés
 
 ```{r}
 plotQualityProfile(fnRs[1:2])
 ```
-Obsevation du taux d'erreur pour les séquences Rs. On observe une forte diminution du score de qualité vers 200 nucléotide. La coupe se fera ici, ie que tous les nucléotides supérieur à 200 seront supprimés
+Observation du taux d'erreur pour les séquences Rs. On observe une forte diminution du score de qualité vers 200 nucléotide. La coupe se fera ici, ie que tous les nucléotides supérieur à 200 seront supprimés
 
 ```{r}
 filtFs <- file.path(path, "filtered", paste0(sample.names, "_R1filt.fastq.gz"))
